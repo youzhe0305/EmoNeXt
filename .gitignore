@@ -1,0 +1,11 @@
+data
+out2
+output.csv
+__pycache__
+*.jpg
+*.png
+*.pt
+*.csv
+out3
+wandb
+scripts

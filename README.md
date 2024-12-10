@@ -17,31 +17,38 @@ Facial expressions play a crucial role in human communication serving as a power
    
         pip install -r requirements.txt
 
-5. Download the data and run training:
+5. put data into /data folder
 
-        python scripts/download_dataset.py
-        python train.py \
-            --dataset-path='FER2013' \
-            --batch-size=64 --lr=0.0001 \
-            --epochs=300 \
-            --amp \
-            --in_22k \
-            --num-workers=1 \
-            --model-size='tiny'
+# Pipeline:
 
-## Comments
-Our codebase builds heavily on Facebook's [ConvNeXt](https://github.com/facebookresearch/ConvNeXt). Thanks for open-sourcing!
+1. Train 5 model wight
+2. use tester to inference 5 csv (output{i}.csv)
+3. use vote_csv.py to get vote result
 
-## Citation
-Please use the following bibtex entry:
+# Command
 
-      @inproceedings{el2023emonext,
-        title={EmoNeXt: an Adapted ConvNeXt for Facial Emotion Recognition},
-        author={El Boudouri, Yassine and Bohi, Amine},
-        booktitle={2023 IEEE 25th International Workshop on Multimedia Signal Processing (MMSP)},
-        pages={1--6},
-        year={2023},
-        organization={IEEE}
-      }
+## Training Command:
+python train.py \
+     --dataset-path='data/Images' \
+     --batch-size=64 --lr=0.0001 \
+     --epochs=300 \
+     --amp \
+     --in_22k \
+     --num-workers=4 \
+     --model-size='base' \
+     --output-dir 'out' \
+     --device
+## Testing Command:
+python tester.py \
+     --dataset-path='data/Images' \
+     --amp \
+     --in_22k \
+     --num-workers=1 \
+     --model-size='base'
+## Vote Commad:
+python csv_vote.py
+
+
+
 
 

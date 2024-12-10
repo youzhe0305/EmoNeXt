@@ -10,15 +10,16 @@ import torch
 import torchvision
 from ema_pytorch import EMA
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 from tqdm import tqdm
 
-import wandb
+# import wandb
 from models import get_model
 from scheduler import CosineAnnealingWithWarmRestartsLR
+from dataset import MLDataste
 
-seed = 2001
+seed = 529
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 random.seed(seed)
@@ -33,11 +34,11 @@ class Trainer:
         model,
         training_dataloader,
         validation_dataloader,
-        testing_dataloader,
+        # testing_dataloader,
         classes,
         output_dir,
         max_epochs: int = 10000,
-        early_stopping_patience: int = 12,
+        early_stopping_patience: int = 10,
         execution_name=None,
         lr: float = 1e-4,
         amp: bool = False,
@@ -45,25 +46,29 @@ class Trainer:
         ema_update_every: int = 16,
         gradient_accumulation_steps: int = 1,
         checkpoint_path: str = None,
+        device = 0,
     ):
         self.epochs = max_epochs
 
         self.training_dataloader = training_dataloader
         self.validation_dataloader = validation_dataloader
-        self.testing_dataloader = testing_dataloader
+        # self.testing_dataloader = testing_dataloader
 
         self.classes = classes
         self.num_classes = len(classes)
 
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        print("Device used: " + self.device.type)
+        self.device = torch.device(f"cuda:{device}" if torch.cuda.is_available() else "cpu")
+        print("Device used: ", self.device)
 
         self.amp = amp
         self.gradient_accumulation_steps = gradient_accumulation_steps
 
         self.model = model.to(self.device)
 
-        self.optimizer = AdamW(model.parameters(), lr=lr)
+        self.optimizer = AdamW(model.parameters(), lr=lr, weight_decay=1e-3)
+        print(f"lr: {lr}")
+        for param_group in self.optimizer.param_groups:
+            print(f"Current LR: {param_group['lr']}")
         self.scaler = torch.cuda.amp.GradScaler(enabled=self.amp)
         self.scheduler = CosineAnnealingWithWarmRestartsLR(
             self.optimizer, warmup_steps=128, cycle_steps=1024
@@ -84,39 +89,41 @@ class Trainer:
         if checkpoint_path:
             self.load(checkpoint_path)
 
-        wandb.watch(model, log="all")
+        # wandb.watch(model, log="all")
 
     def run(self):
         counter = 0  # Counter for epochs with no validation loss improvement
 
         images, _ = next(iter(self.training_dataloader))
         images = [transforms.ToPILImage()(image) for image in images]
-        wandb.log({"Images": [wandb.Image(image) for image in images]})
+        # wandb.log({"Images": [wandb.Image(image) for image in images]})
 
+        all_train_loss = []
+        all_val_loss = []
         for epoch in range(self.epochs):
+            for param_group in self.optimizer.param_groups:
+                print(f"Current LR: {param_group['lr']}")
             print("[Epoch: %d/%d]" % (epoch + 1, self.epochs))
-
             self.visualize_stn()
             train_loss, train_accuracy = self.train_epoch()
             val_loss, val_accuracy = self.val_epoch()
-
-            wandb.log(
-                {
-                    "Train Loss": train_loss,
-                    "Val Loss": val_loss,
-                    "Train Accuracy": train_accuracy,
-                    "Val Accuracy": val_accuracy,
-                    "Epoch": epoch + 1,
-                }
-            )
-
+            print(f'Training Loss: {train_loss}, Training Acc: {train_accuracy} %')
+            print(f'Validation Loss: {val_loss}, Validation Acc: {val_accuracy} %')
+            if(np.isnan(train_loss)):
+                train_loss = 300
+            if(np.isnan(val_loss)):
+                val_loss = 300
+            all_train_loss.append(train_loss)
+            all_val_loss.append(val_loss)
+            # plot_learning_curve(all_train_loss, all_val_loss)
             # Early stopping
             if val_accuracy > self.best_val_accuracy:
-                self.save()
+                self.save(epoch=epoch+1)
                 counter = 0
                 self.best_val_accuracy = val_accuracy
             else:
                 counter += 1
+                print(f"Not improvement for {counter} epoch")
                 if counter >= self.early_stopping_patience:
                     print(
                         "Validation loss did not improve for %d epochs. Stopping training."
@@ -124,8 +131,8 @@ class Trainer:
                     )
                     break
 
-        self.test_model()
-        wandb.finish()
+        # self.test_model()
+        # wandb.finish()
 
     def train_epoch(self):
         self.model.train()
@@ -198,21 +205,21 @@ class Trainer:
             .mean()
             .item()
         )
-        wandb.log(
-            {
-                "confusion_matrix": wandb.plot.confusion_matrix(
-                    probs=None,
-                    y_true=true_labels,
-                    preds=predicted_labels,
-                    class_names=self.classes,
-                )
-            }
-        )
+        # wandb.log(
+        #     {
+        #         "confusion_matrix": wandb.plot.confusion_matrix(
+        #             probs=None,
+        #             y_true=true_labels,
+        #             preds=predicted_labels,
+        #             class_names=self.classes,
+        #         )
+        #     }
+        # )
 
-        print(
-            "Eval loss: %.4f, Eval Accuracy: %.4f %%"
-            % (np.mean(avg_loss) * 1.0, accuracy * 100.0)
-        )
+        # print(
+        #     "Eval loss: %.4f, Eval Accuracy: %.4f %%"
+        #     % (np.mean(avg_loss) * 1.0, accuracy * 100.0)
+        # )
         return np.mean(avg_loss), accuracy * 100.0
 
     def test_model(self):
@@ -249,16 +256,16 @@ class Trainer:
         )
         print("Test Accuracy: %.4f %%" % (accuracy * 100.0))
 
-        wandb.log(
-            {
-                "confusion_matrix": wandb.plot.confusion_matrix(
-                    probs=None,
-                    y_true=true_labels,
-                    preds=predicted_labels,
-                    class_names=self.classes,
-                )
-            }
-        )
+        # wandb.log(
+        #     {
+        #         "confusion_matrix": wandb.plot.confusion_matrix(
+        #             probs=None,
+        #             y_true=true_labels,
+        #             preds=predicted_labels,
+        #             class_names=self.classes,
+        #         )
+        #     }
+        # )
 
     def visualize_stn(self):
         self.model.eval()
@@ -275,9 +282,9 @@ class Trainer:
         grid = to_pil(torchvision.utils.make_grid(batch, nrow=16, padding=4))
         stn_batch = to_pil(torchvision.utils.make_grid(stn_batch, nrow=16, padding=4))
 
-        wandb.log({"batch": wandb.Image(grid), "stn": wandb.Image(stn_batch)})
+        # wandb.log({"batch": wandb.Image(grid), "stn": wandb.Image(stn_batch)})
 
-    def save(self):
+    def save(self, epoch=-1):
         data = {
             "model": self.model.state_dict(),
             "opt": self.optimizer.state_dict(),
@@ -287,7 +294,8 @@ class Trainer:
             "best_acc": self.best_val_accuracy,
         }
 
-        torch.save(data, str(self.output_directory / f"{self.execution_name}.pt"))
+        torch.save(data, str(self.output_directory / f"{epoch}.pt"))
+        print(f'save model weight: {str(self.output_directory / f"{epoch}.pt")}')
 
     def load(self, path):
         data = torch.load(path, map_location=self.device)
@@ -320,6 +328,25 @@ def plot_images():
     plt.savefig("images.png")
     plt.show()
 
+def plot_learning_curve(training_losses, validation_losses=None, save_path="learning_curve.png"):
+
+    epochs = range(1, len(training_losses) + 1)
+    plt.figure(figsize=(10, 6))
+
+    plt.plot(epochs, training_losses, label="Training Loss", color="blue", marker="o")
+
+    if validation_losses:
+        plt.plot(epochs, validation_losses, label="Validation Loss", color="orange", marker="o")
+
+    plt.title("Learning Curve", fontsize=16)
+    plt.xlabel("Epochs", fontsize=14)
+    plt.ylabel("Loss", fontsize=14)
+    plt.grid(True, linestyle="--", alpha=0.7)
+    plt.legend(fontsize=12)
+    plt.tight_layout()
+
+    plt.savefig(save_path)
+    plt.show()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train EmoNeXt on Fer2013")
@@ -370,6 +397,12 @@ if __name__ == "__main__":
         default="tiny",
         help="Choose the size of the model: tiny, small, base, large, or xlarge",
     )
+    parser.add_argument(
+        "--device",
+        type=int,
+        default=0,
+        help="Choose device number",
+    )
 
     opt = parser.parse_args()
     print(opt)
@@ -377,7 +410,7 @@ if __name__ == "__main__":
     current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     exec_name = f"EmoNeXt_{opt.model_size}_{current_time}"
 
-    wandb.init(project="EmoNeXt", name=exec_name, anonymous="must")
+    # wandb.init(project="EmoNeXt", name=exec_name, anonymous="must")
 
     train_transform = transforms.Compose(
         [
@@ -418,13 +451,29 @@ if __name__ == "__main__":
         ]
     )
 
-    train_dataset = datasets.ImageFolder(opt.dataset_path + "/train", train_transform)
-    val_dataset = datasets.ImageFolder(opt.dataset_path + "/val", val_transform)
-    test_dataset = datasets.ImageFolder(opt.dataset_path + "/test", test_transform)
+    aug_transform = transforms.Compose(
+        [
+            transforms.RandomHorizontalFlip(p=1.0),
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.RandomRotation(degrees=20),
+            transforms.RandomCrop(224),
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+        ]
+    )
+
+    # train_dataset = datasets.ImageFolder(opt.dataset_path + "/train", train_transform)
+    train_dataset = MLDataste(opt.dataset_path + "/train", normal_transform=val_transform, aug_transform=aug_transform, mode='train')
+    classes = ["Angry", "Disgust", "Fear", "Happy","Neutral", "Sad", "Surprise"]
+    train_dataset, val_dataset = \
+    random_split(train_dataset, [int(0.95 * len(train_dataset)), len(train_dataset) - int(0.95 * len(train_dataset))])
+    # val_dataset = datasets.ImageFolder(opt.dataset_path + "data/Images/val", val_transform)
+    # test_dataset = datasets.ImageFolder(opt.dataset_path + "/test", test_transform)
 
     print("Using %d images for training." % len(train_dataset))
     print("Using %d images for evaluation." % len(val_dataset))
-    print("Using %d images for testing." % len(test_dataset))
+    # print("Using %d images for testing." % len(test_dataset))
 
     train_loader = DataLoader(
         train_dataset,
@@ -433,20 +482,23 @@ if __name__ == "__main__":
         num_workers=opt.num_workers,
     )
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-    test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
+    # test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-    net = get_model(len(train_dataset.classes), opt.model_size, in_22k=opt.in_22k)
+    net = get_model(len(classes), opt.model_size, in_22k=opt.in_22k)
+    total_params = sum(p.numel() for p in net.parameters())
+    print(f"Total number of parameters: {total_params}")
 
     Trainer(
         model=net,
         training_dataloader=train_loader,
         validation_dataloader=val_loader,
-        testing_dataloader=test_loader,
-        classes=train_dataset.classes,
+        # testing_dataloader=test_loader,
+        classes=classes,
         execution_name=exec_name,
         lr=opt.lr,
         output_dir=opt.output_dir,
         checkpoint_path=opt.checkpoint,
         max_epochs=opt.epochs,
         amp=opt.amp,
+        device=opt.device,
     ).run()

@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch.hub import load_state_dict_from_url
 from torchvision.models import vgg16_bn, VGG16_BN_Weights
 from torchvision.ops import StochasticDepth
-
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_urls = {
     "convnext_tiny_1k": "https://dl.fbaipublicfiles.com/convnext/convnext_tiny_1k_224_ema.pth",
     "convnext_small_1k": "https://dl.fbaipublicfiles.com/convnext/convnext_small_1k_224_ema.pth",
@@ -250,9 +250,9 @@ class EmoNeXt(nn.Module):
 
         if labels is not None:
             mean_attention_weight = torch.mean(weights)
-            attention_loss = torch.mean((weights - mean_attention_weight) ** 2)
-
-            loss = F.cross_entropy(logits, labels, label_smoothing=0.2) + attention_loss
+            # attention_loss = torch.mean((weights - mean_attention_weight) ** 2)
+            class_weights = torch.tensor([1.0, 1.5, 1.0, 1.0, 1.0, 1.0, 0.5]).to(device)
+            loss = F.cross_entropy(logits, labels, label_smoothing=0.2, weight=class_weights) #  + attention_loss
             return torch.argmax(logits, dim=1), logits, loss
 
         return torch.argmax(logits, dim=1), logits
