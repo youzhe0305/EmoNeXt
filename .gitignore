@@ -9,3 +9,4 @@ __pycache__
 out3
 wandb
 scripts
+!example.pt

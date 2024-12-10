@@ -34,7 +34,6 @@ class Trainer:
         model,
         training_dataloader,
         validation_dataloader,
-        # testing_dataloader,
         classes,
         output_dir,
         max_epochs: int = 10000,
@@ -52,7 +51,6 @@ class Trainer:
 
         self.training_dataloader = training_dataloader
         self.validation_dataloader = validation_dataloader
-        # self.testing_dataloader = testing_dataloader
 
         self.classes = classes
         self.num_classes = len(classes)
@@ -96,7 +94,6 @@ class Trainer:
 
         images, _ = next(iter(self.training_dataloader))
         images = [transforms.ToPILImage()(image) for image in images]
-        # wandb.log({"Images": [wandb.Image(image) for image in images]})
 
         all_train_loss = []
         all_val_loss = []
@@ -130,9 +127,6 @@ class Trainer:
                         % self.early_stopping_patience
                     )
                     break
-
-        # self.test_model()
-        # wandb.finish()
 
     def train_epoch(self):
         self.model.train()
@@ -205,21 +199,6 @@ class Trainer:
             .mean()
             .item()
         )
-        # wandb.log(
-        #     {
-        #         "confusion_matrix": wandb.plot.confusion_matrix(
-        #             probs=None,
-        #             y_true=true_labels,
-        #             preds=predicted_labels,
-        #             class_names=self.classes,
-        #         )
-        #     }
-        # )
-
-        # print(
-        #     "Eval loss: %.4f, Eval Accuracy: %.4f %%"
-        #     % (np.mean(avg_loss) * 1.0, accuracy * 100.0)
-        # )
         return np.mean(avg_loss), accuracy * 100.0
 
     def test_model(self):
@@ -256,17 +235,6 @@ class Trainer:
         )
         print("Test Accuracy: %.4f %%" % (accuracy * 100.0))
 
-        # wandb.log(
-        #     {
-        #         "confusion_matrix": wandb.plot.confusion_matrix(
-        #             probs=None,
-        #             y_true=true_labels,
-        #             preds=predicted_labels,
-        #             class_names=self.classes,
-        #         )
-        #     }
-        # )
-
     def visualize_stn(self):
         self.model.eval()
 
@@ -281,8 +249,6 @@ class Trainer:
 
         grid = to_pil(torchvision.utils.make_grid(batch, nrow=16, padding=4))
         stn_batch = to_pil(torchvision.utils.make_grid(stn_batch, nrow=16, padding=4))
-
-        # wandb.log({"batch": wandb.Image(grid), "stn": wandb.Image(stn_batch)})
 
     def save(self, epoch=-1):
         data = {
@@ -468,8 +434,6 @@ if __name__ == "__main__":
     classes = ["Angry", "Disgust", "Fear", "Happy","Neutral", "Sad", "Surprise"]
     train_dataset, val_dataset = \
     random_split(train_dataset, [int(0.95 * len(train_dataset)), len(train_dataset) - int(0.95 * len(train_dataset))])
-    # val_dataset = datasets.ImageFolder(opt.dataset_path + "data/Images/val", val_transform)
-    # test_dataset = datasets.ImageFolder(opt.dataset_path + "/test", test_transform)
 
     print("Using %d images for training." % len(train_dataset))
     print("Using %d images for evaluation." % len(val_dataset))
@@ -482,7 +446,6 @@ if __name__ == "__main__":
         num_workers=opt.num_workers,
     )
     val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False)
-    # test_loader = DataLoader(test_dataset, batch_size=32, shuffle=False)
 
     net = get_model(len(classes), opt.model_size, in_22k=opt.in_22k)
     total_params = sum(p.numel() for p in net.parameters())
@@ -492,7 +455,6 @@ if __name__ == "__main__":
         model=net,
         training_dataloader=train_loader,
         validation_dataloader=val_loader,
-        # testing_dataloader=test_loader,
         classes=classes,
         execution_name=exec_name,
         lr=opt.lr,
