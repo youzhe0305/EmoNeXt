@@ -5,7 +5,7 @@ from PIL import Image
 from torch.utils.data import Dataset
 
 class MLDataste(Dataset):
-    def __init__(self, img_dir, normal_transform=None, aug_transform=None, mode='test'):
+    def __init__(self, img_dir, normal_transform=None, aug_transform=None, aug2_transform=None, mode='test'):
         self.img_dir = img_dir
         self.img_path = []
         self.labels = []
@@ -25,9 +25,12 @@ class MLDataste(Dataset):
             print('Error: unknown dataset mode')
         self.normal_transform = normal_transform
         self.aug_transform = aug_transform
+        self.aug2_transform = aug2_transform
 
     def __len__(self):
-        if self.aug_transform:
+        if self.aug2_transform and self.aug_transform:
+            return len(self.img_path) * 3
+        if self.aug_transform or self.aug2_transform:
             return len(self.img_path) * 2
         else:
             return len(self.img_path)
@@ -38,13 +41,18 @@ class MLDataste(Dataset):
         
         if self.mode == 'train':
             flag = 0
-            if idx >= len(self.img_path):
-                idx %= len(self.img_path)
+            if idx >= len(self.img_dir) * 3:
+                flag = 2
+            if idx >= len(self.img_path) and idx < len(self.img_path) * 3:
                 flag = 1
+            idx %= len(self.img_path)
+            
             img_name = self.img_path[idx]
             image = Image.open(img_name)
             label = self.labels[idx]
-            if self.aug_transform and flag:
+            if self.aug2_transform and flag == 2:
+                image = self.aug2_transform(image)
+            elif self.aug_transform and flag == 1:
                 image = self.aug_transform(image)
             elif self.normal_transform:
                 image = self.normal_transform(image)

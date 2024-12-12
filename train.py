@@ -429,11 +429,23 @@ if __name__ == "__main__":
         ]
     )
 
+    aug2_transform = transforms.Compose(
+        [
+            transforms.Grayscale(),
+            transforms.Resize(236),
+            transforms.RandomCrop(224),
+            transforms.ColorJitter(brightness=0.2, contrast=0.2),
+            transforms.ToTensor(),
+            transforms.RandomErasing(p=1.0, scale=(0.05, 0.3)),
+            transforms.Lambda(lambda x: x.repeat(3, 1, 1)),
+        ]
+    )
+
     # train_dataset = datasets.ImageFolder(opt.dataset_path + "/train", train_transform)
-    train_dataset = MLDataste(opt.dataset_path + "/train", normal_transform=val_transform, aug_transform=aug_transform, mode='train')
+    train_dataset = MLDataste(opt.dataset_path + "/train", normal_transform=val_transform, aug_transform=aug_transform, aug2_transform=aug2_transform, mode='train')
     classes = ["Angry", "Disgust", "Fear", "Happy","Neutral", "Sad", "Surprise"]
     train_dataset, val_dataset = \
-    random_split(train_dataset, [int(0.95 * len(train_dataset)), len(train_dataset) - int(0.95 * len(train_dataset))])
+    random_split(train_dataset, [int(0.96 * len(train_dataset)), len(train_dataset) - int(0.96 * len(train_dataset))])
 
     print("Using %d images for training." % len(train_dataset))
     print("Using %d images for evaluation." % len(val_dataset))

@@ -85,7 +85,7 @@ class Tester:
         # wandb.watch(model, log="all")
 
     def run(self):
-        self.load('/home/youzhe0305/NYCU-Intro-ML/hw4/EmoNeXt/model_weight/48.pt')
+        self.load('/home/youzhe0305/NYCU-Intro-ML/hw4/EmoNeXt/model_weight/30.pt')
         self.test_model()
 
     def test_model(self):
@@ -111,7 +111,7 @@ class Tester:
 
         pbar.close()
 
-        with open('output7.csv', mode='w', newline='') as f:
+        with open('output12.csv', mode='w', newline='') as f:
             writer = csv.writer(f)
             writer.writerows(prediction_all)
 
